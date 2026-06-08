@@ -1,6 +1,6 @@
 # OQUAKE
 
-An interactive, single-file earthquake simulator set in a custom worldbuilding project. Click anywhere on the map to spawn seismic events, watch P and S waves propagate in real time, and observe shaking intensity, tsunami warnings, and sensor network alerts — all rendered on an HTML5 Canvas with no dependencies.
+An interactive, single-file earthquake simulator set in a custom worldbuilding project. Click anywhere on the map to spawn seismic events, watch P and S waves propagate in real time, and observe shaking intensity, tsunami warnings, and sensor network alerts.
 Inspired by Earthquake Early Warning system in Japan (JQuake)
 ---
 
