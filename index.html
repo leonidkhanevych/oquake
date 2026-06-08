@@ -1,0 +1,1990 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0d1117; font-family: monospace; color: #e6edf3; overflow: hidden; }
+
+#app { display: grid; grid-template-columns: 1fr 200px; grid-template-rows: 36px 1fr 90px; height: 100vh; width: 100vw; }
+
+#header {
+  grid-column: 1 / -1; grid-row: 1;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 14px; background: #161b22;
+  border-bottom: 0.5px solid #30363d;
+}
+#header .logo { font-size: 13px; font-weight: 700; color: #ff6b35; letter-spacing: 2px; }
+#header .stats { display: flex; gap: 16px; font-size: 11px; color: #8b949e; align-items: center; }
+#header .stats span b { color: #e6edf3; }
+
+#btn-place-sensors {
+  font-family: monospace; font-size: 10px; padding: 4px 10px;
+  border-radius: 3px; cursor: pointer; border: 0.5px solid #30363d;
+  background: #21262d; color: #8b949e; white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  display: flex; align-items: center; gap: 6px;
+}
+#btn-place-sensors:hover { background: #30363d; color: #e6edf3; }
+#btn-place-sensors.active {
+  background: #1a3a1a; color: #3fb950;
+  border-color: #3fb950; animation: pulse-border 1.4s ease-in-out infinite;
+}
+@keyframes pulse-border {
+  0%,100% { box-shadow: 0 0 0 0 rgba(63,185,80,0.25); }
+  50%      { box-shadow: 0 0 0 4px rgba(63,185,80,0); }
+}
+#sensor-count-badge {
+  font-size: 9px; padding: 1px 5px; border-radius: 2px;
+  background: #21262d; color: #8b949e;
+}
+#btn-place-sensors.active #sensor-count-badge {
+  background: #0c2010; color: #3fb950;
+}
+
+#btn-undo-sensor {
+  font-family: monospace; font-size: 10px; padding: 4px 8px;
+  border-radius: 3px; cursor: pointer; border: 0.5px solid #30363d;
+  background: #21262d; color: #8b949e; white-space: nowrap;
+  display: none;
+}
+#btn-undo-sensor:hover { background: #30363d; color: #e6edf3; }
+#btn-undo-sensor.visible { display: block; }
+
+#map-wrap {
+  grid-column: 1; grid-row: 2;
+  position: relative; background: #0a1628;
+  cursor: crosshair; overflow: hidden;
+}
+#map-wrap.place-mode { cursor: cell; }
+#place-mode-hint {
+  display: none; position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  background: rgba(63,185,80,0.12); border: 0.5px solid #3fb950;
+  color: #3fb950; font-size: 10px; padding: 4px 12px; border-radius: 3px;
+  pointer-events: none; z-index: 20; white-space: nowrap;
+}
+#place-mode-hint.visible { display: block; }
+#map-canvas { display: block; position: absolute; top: 0; left: 0; }
+#map-hint { position: absolute; bottom: 10px; right: 12px; font-size: 10px; color: #30363d; pointer-events: none; }
+#zoom-controls {
+  position: absolute; bottom: 10px; left: 10px; display: flex; flex-direction: column; gap: 4px;
+  pointer-events: all; z-index: 10;
+}
+#zoom-controls button {
+  width: 26px; height: 26px; background: rgba(22,27,34,0.9); border: 0.5px solid #30363d;
+  color: #8b949e; font-size: 16px; line-height: 1; cursor: pointer; border-radius: 3px;
+  font-family: monospace; display: flex; align-items: center; justify-content: center;
+}
+#zoom-controls button:hover { background: #21262d; color: #e6edf3; }
+#zoom-level { font-size: 9px; color: #484f58; text-align: center; }
+
+#alert-panel {
+  position: absolute; top: 10px; left: 10px; width: 240px;
+  background: rgba(13,17,23,0.93); border: 0.5px solid #30363d;
+  font-family: monospace; font-size: 11px; color: #e6edf3;
+  pointer-events: none; z-index: 10;
+}
+#alert-title-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 8px; border-bottom: 0.5px solid #30363d;
+}
+#al-title { font-size: 11px; font-weight: 700; }
+#al-shock { font-size: 9px; padding: 1px 5px; background: #21262d; color: #8b949e; border-radius: 2px; }
+#alert-mmi-row { display: flex; align-items: stretch; border-bottom: 0.5px solid #21262d; }
+#alert-mmi-box {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 6px 8px; border-right: 0.5px solid #21262d; min-width: 50px;
+}
+.mmi-label { font-size: 8px; color: #8b949e; text-align: center; line-height: 1.3; }
+#al-mmi { font-size: 28px; font-weight: 700; line-height: 1; }
+.mmi-sub { font-size: 8px; color: #8b949e; margin-top: 1px; }
+#alert-info { flex: 1; padding: 5px 8px; display: flex; flex-direction: column; gap: 2px; }
+#al-loc { font-size: 10px; font-weight: 700; }
+#al-time, #al-depth { font-size: 9px; color: #8b949e; }
+#alert-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 5px 8px; border-top: 0.5px solid #21262d; }
+.astat { display: flex; align-items: center; justify-content: space-between; font-size: 10px; color: #8b949e; gap: 4px; }
+.av { padding: 1px 5px; border-radius: 2px; font-weight: 700; font-size: 10px; color: #0d1117; min-width: 36px; text-align: center; }
+.av-blue{background:#58a6ff} .av-green{background:#3fb950} .av-yellow{background:#e3b341}
+.av-orange{background:#f0883e} .av-orange-dark{background:#cc6a1e}
+.av-red{background:#f85149} .av-red-dark{background:#b22222}
+.av-purple{background:#9d4edd;color:#fff!important}
+.av-grey{background:#30363d;color:#8b949e!important}
+
+#tsunami-panel {
+  position: absolute; left: 10px; width: 240px;
+  background: rgba(13,17,23,0.95); border: 0.5px solid #30363d;
+  font-family: monospace; font-size: 11px; color: #e6edf3;
+  pointer-events: none; z-index: 10;
+  display: none;
+}
+#tsunami-panel.visible { display: block; }
+#tsunami-title-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 8px; border-bottom: 0.5px solid #30363d;
+}
+#ts-title { font-size: 11px; font-weight: 700; }
+#ts-badge { font-size: 9px; padding: 1px 6px; border-radius: 2px; font-weight: 700; color: #0d1117; }
+#tsunami-body { padding: 6px 8px; display: flex; flex-direction: column; gap: 3px; }
+#ts-info { font-size: 10px; color: #8b949e; }
+#ts-source { font-size: 9px; color: #484f58; }
+#tsunami-levels { display: flex; gap: 4px; padding: 5px 8px; border-top: 0.5px solid #21262d; }
+.ts-level { flex: 1; padding: 3px 4px; border-radius: 2px; text-align: center; font-size: 9px; font-weight: 700; }
+
+#sidebar {
+  grid-column: 2; grid-row: 2;
+  background: #161b22; border-left: 0.5px solid #30363d;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+#sidebar-title {
+  font-size: 9px; color: #484f58; letter-spacing: 1.5px;
+  padding: 8px 10px 6px; border-bottom: 0.5px solid #21262d; flex-shrink: 0;
+}
+#feed { flex: 1; overflow-y: auto; }
+#feed::-webkit-scrollbar { width: 3px; }
+#feed::-webkit-scrollbar-thumb { background: #30363d; }
+
+.feed-item {
+  display: grid; grid-template-columns: 36px 1fr auto; grid-template-rows: auto auto;
+  column-gap: 8px; padding: 7px 8px; border-bottom: 0.5px solid #21262d;
+  animation: slideIn 0.25s ease; cursor: default; align-items: start;
+}
+.feed-item:hover { background: #1c2128; }
+@keyframes slideIn { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:none; } }
+.fi-mmi {
+  grid-row: 1 / 3; grid-column: 1; display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 3px; font-size: 13px; font-weight: 700; line-height: 1; align-self: center;
+}
+.fi-loc { grid-row: 1; grid-column: 2; font-size: 10px; color: #c9d1d9; line-height: 1.3; word-break: break-word; }
+.fi-depth { grid-row: 2; grid-column: 2; font-size: 9px; color: #484f58; margin-top: 1px; }
+.fi-mag { grid-row: 1 / 3; grid-column: 3; font-size: 14px; font-weight: 700; align-self: center; text-align: right; }
+
+#controls {
+  grid-column: 1 / -1; grid-row: 3;
+  background: #161b22; border-top: 0.5px solid #30363d;
+  display: flex; align-items: center; gap: 20px; padding: 0 20px;
+}
+.ctrl { display: flex; align-items: center; gap: 10px; }
+.ctrl label { font-size: 10px; color: #8b949e; letter-spacing: 0.5px; white-space: nowrap; }
+.ctrl .val { font-size: 14px; font-weight: 700; color: #e6edf3; min-width: 42px; }
+.ctrl .val span { font-size: 10px; font-weight: 400; color: #8b949e; }
+.ctrl input[type=range] { width: 140px; cursor: pointer; -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; outline: none; background: linear-gradient(to right, #3fb950, #e3b341, #f85149); }
+.ctrl input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #e6edf3; cursor: pointer; border: none; }
+.ctrl input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #e6edf3; cursor: pointer; border: none; }
+#depth-slider { background: linear-gradient(to right, #f85149, #e3b341, #3fb950); }
+.divider-v { width: 0.5px; height: 50px; background: #30363d; flex-shrink: 0; }
+#btn-clear {
+  font-family: monospace; font-size: 10px; padding: 5px 12px;
+  border-radius: 3px; cursor: pointer; border: 0.5px solid #30363d;
+  background: #21262d; color: #c9d1d9; white-space: nowrap; margin-left: auto;
+}
+#btn-clear:hover { background: #30363d; }
+.region-mini { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: 6px; }
+.rm-item { font-size: 9px; display: flex; align-items: center; gap: 3px; }
+.rm-dot { width: 6px; height: 6px; border-radius: 50%; }
+#intensity-legend {
+  position: absolute; left: 10px; width: auto;
+  background: rgba(13,17,23,0.93); border: 0.5px solid #30363d;
+  font-family: monospace; font-size: 11px; color: #e6edf3;
+  pointer-events: none; z-index: 10;
+  padding: 6px 8px 7px;
+}
+#legend-label {
+  font-size: 8px; color: #484f58; letter-spacing: 1px; margin-bottom: 5px;
+}
+#legend-body {
+  display: flex; gap: 5px; align-items: stretch;
+}
+#legend-bar-wrap {
+  width: 10px; flex-shrink: 0;
+}
+#legend-bar {
+  width: 100%; height: 144px; border-radius: 2px;
+  background: linear-gradient(to bottom,
+    #9d4edd,
+    #b22222,
+    #f85149,
+    #cc6a1e,
+    #f0883e,
+    #e3b341,
+    #3fb950,
+    #58a6ff
+  );
+}
+#legend-ticks {
+  display: flex; flex-direction: column; justify-content: space-between;
+  height: 144px;
+}
+.ltick {
+  font-size: 8px; line-height: 1; font-family: monospace;
+}
+
+#btn-place-home {
+  font-family: monospace; font-size: 10px; padding: 4px 10px;
+  border-radius: 3px; cursor: pointer; border: 0.5px solid #30363d;
+  background: #21262d; color: #8b949e; white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  display: flex; align-items: center; gap: 6px;
+}
+#btn-place-home:hover { background: #30363d; color: #e6edf3; }
+#btn-place-home.active {
+  background: #1a2a3a; color: #58a6ff;
+  border-color: #58a6ff; animation: pulse-border-home 1.4s ease-in-out infinite;
+}
+@keyframes pulse-border-home {
+  0%,100% { box-shadow: 0 0 0 0 rgba(88,166,255,0.25); }
+  50%      { box-shadow: 0 0 0 4px rgba(88,166,255,0); }
+}
+#btn-place-home.has-home { color: #58a6ff; border-color: #58a6ff55; }
+#btn-remove-home {
+  font-family: monospace; font-size: 10px; padding: 4px 8px;
+  border-radius: 3px; cursor: pointer; border: 0.5px solid #30363d;
+  background: #21262d; color: #8b949e; white-space: nowrap;
+  display: none;
+}
+#btn-remove-home:hover { background: #30363d; color: #e6edf3; }
+#btn-remove-home.visible { display: block; }
+
+#home-panel {
+  position: absolute; left: 50px; bottom: 10px;
+  width: 300px;
+  background: rgba(13,17,23,0.97);
+  border: 1.5px solid #30363d;
+  font-family: monospace; font-size: 11px; color: #e6edf3;
+  pointer-events: none; z-index: 15;
+  display: none;
+  overflow: hidden;
+}
+#home-panel.visible { display: block; }
+#home-panel-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.5px;
+  padding: 5px 8px; text-align: left;
+  border-bottom: 1px solid currentColor;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px;
+}
+#home-panel-body {
+  display: flex; align-items: stretch;
+}
+#home-panel-mmi {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 8px 10px; min-width: 62px;
+  border-right: 0.5px solid #30363d;
+}
+#home-panel-mmi .mmi-label { font-size: 8px; color: #8b949e; text-align: center; line-height: 1.4; }
+#home-panel-mmi-val { font-size: 32px; font-weight: 700; line-height: 1; }
+#home-panel-mmi .mmi-sub { font-size: 8px; color: #8b949e; margin-top: 2px; }
+#home-panel-info {
+  flex: 1; padding: 5px 8px; display: flex; flex-direction: column; gap: 4px; justify-content: center;
+}
+.hp-row { font-size: 9px; color: #8b949e; }
+.hp-lbl { color: #8b949e; }
+.hp-val { font-weight: 700; color: #e6edf3; font-size: 9px; }
+#hp-warn-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 64px; flex-shrink: 0; border-left: 0.5px solid #30363d;
+  transition: opacity 0.3s;
+}
+#hp-warn-icon svg {
+  width: 46px; height: 46px; display: block;
+}
+#home-panel-wave-row {
+  display: flex; gap: 6px; padding: 5px 8px; border-top: 0.5px solid #21262d;
+}
+.home-wave { flex: 1; display: flex; align-items: center; justify-content: space-between; font-size: 9px; color: #8b949e; }
+.home-wave-val { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 2px; color: #0d1117; min-width: 28px; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <div class="logo">OQUAKE</div>
+    <div class="stats">
+      <span>Events: <b id="stat-count">0</b></span>
+      <span>Max: <b id="stat-max">—</b></span>
+      <span style="color:#484f58">|</span>
+      <button id="btn-place-sensors" onclick="togglePlaceMode()">
+        ▲ Place Sensors
+        <span id="sensor-count-badge">0 placed</span>
+      </button>
+      <button id="btn-undo-sensor" onclick="undoLastSensor()">↩ Undo</button>
+      <button id="btn-place-home" onclick="toggleHomeMode()">⌂ My Location</button>
+      <button id="btn-remove-home" onclick="removeHome()">✕ Remove</button>
+    </div>
+  </div>
+
+  <div id="map-wrap">
+    <canvas id="map-canvas"></canvas>
+    <div id="place-mode-hint">● Sensor placement active — click map to place · press Escape to exit</div>
+    <div id="place-home-hint" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(88,166,255,0.12);border:0.5px solid #58a6ff;color:#58a6ff;font-size:10px;padding:4px 12px;border-radius:3px;pointer-events:none;z-index:20;white-space:nowrap;">⌂ Click anywhere inside the outline to set your location · Escape to cancel</div>
+    <div id="map-hint">click to place epicenter · scroll to zoom · drag to pan</div>
+    <div id="zoom-controls">
+      <button onclick="zoomBy(1.5)">+</button>
+      <div id="zoom-level">1×</div>
+      <button onclick="zoomBy(1/1.5)">−</button>
+      <button onclick="resetZoom()" title="Reset">⌂</button>
+    </div>
+
+    <div id="home-panel">
+      <div id="home-panel-title">
+        <span id="hp-title-text">⚠ Strong shaking expected</span>
+        <span id="hp-mag" style="background:#30363d;color:#8b949e;font-size:10px;font-weight:700;padding:1px 6px;border-radius:2px;">—</span>
+      </div>
+      <div id="home-panel-body">
+        <div id="home-panel-mmi">
+          <div class="mmi-label">Max.<br>Intensity<br>Est.</div>
+          <div id="home-panel-mmi-val">—</div>
+          <div class="mmi-sub">MMI</div>
+        </div>
+        <div id="home-panel-info">
+          <div class="hp-row">Distance: <span class="hp-val" id="hp-dist">—</span></div>
+          <div class="hp-row">Depth: <span class="hp-val" id="hp-depth">—</span></div>
+          <div class="hp-row">P Wave arrival: <span class="hp-val" id="hp-pwave">—</span></div>
+          <div class="hp-row">S Wave arrival: <span class="hp-val" id="hp-swave">—</span></div>
+        </div>
+        <div id="hp-warn-icon">
+          <svg viewBox="0 0 46 46" xmlns="http://www.w3.org/2000/svg">
+            <polygon id="hp-warn-tri" points="23,4 43,40 3,40" fill="#30363d" stroke="white" stroke-width="2.5" stroke-linejoin="round"/>
+            <text id="hp-warn-label" x="23" y="26" text-anchor="middle" dominant-baseline="central" font-family="monospace" font-weight="900" font-size="20" fill="black">!</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div id="alert-panel">
+      <div id="alert-title-bar">
+        <span id="al-title" style="color:#484f58">No earthquake warning</span>
+        <span id="al-shock"></span>
+      </div>
+      <div id="alert-mmi-row">
+        <div id="alert-mmi-box">
+          <div class="mmi-label">Max<br>Intensity</div>
+          <div id="al-mmi" style="color:#484f58">—</div>
+          <div class="mmi-sub">JMA</div>
+        </div>
+        <div id="alert-info">
+          <div id="al-loc" style="color:#484f58">—</div>
+          <div id="al-time">—</div>
+          <div id="al-depth">—</div>
+        </div>
+      </div>
+      <div id="alert-stats">
+        <div class="astat">Foreshock <span class="av av-grey" id="al-fore">—</span></div>
+        <div class="astat">Mainshock <span class="av av-grey" id="al-main">—</span></div>
+        <div class="astat">Aftershock <span class="av av-grey" id="al-after">—</span></div>
+        <div class="astat">Depth <span class="av av-grey" id="al-depthv">—</span></div>
+      </div>
+    </div>
+
+    <div id="tsunami-panel">
+      <div id="tsunami-title-bar">
+        <span id="ts-title">TSUNAMI WARNING</span>
+        <span id="ts-badge">ADVISORY</span>
+      </div>
+      <div id="tsunami-body">
+        <div id="ts-info">—</div>
+        <div id="ts-source">—</div>
+      </div>
+      <div id="tsunami-levels">
+        <div class="ts-level" id="tsl-yellow" style="background:#21262d;color:#484f58;border:0.5px solid #30363d">WATCH</div>
+        <div class="ts-level" id="tsl-red"    style="background:#21262d;color:#484f58;border:0.5px solid #30363d">WARNING</div>
+        <div class="ts-level" id="tsl-purple" style="background:#21262d;color:#484f58;border:0.5px solid #30363d">MAJOR</div>
+      </div>
+    </div>
+
+    <div id="intensity-legend">
+      <div id="legend-label">Intensity</div>
+      <div id="legend-body">
+        <div id="legend-bar-wrap">
+          <div id="legend-bar"></div>
+        </div>
+        <div id="legend-ticks">
+          <div class="ltick" style="color:#9d4edd">7</div>
+          <div class="ltick" style="color:#b22222">6+</div>
+          <div class="ltick" style="color:#f85149">6-</div>
+          <div class="ltick" style="color:#cc6a1e">5+</div>
+          <div class="ltick" style="color:#f0883e">5-</div>
+          <div class="ltick" style="color:#e3b341">4</div>
+          <div class="ltick" style="color:#3fb950">3</div>
+          <div class="ltick" style="color:#58a6ff">2</div>
+          <div class="ltick" style="color:#58a6ff">1</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div id="sidebar-title">RECENT ACTIVITY</div>
+    <div id="feed"></div>
+  </div>
+
+  <div id="controls">
+    <div class="ctrl">
+      <label>MAGNITUDE</label>
+      <div class="val" id="mag-val">4.0 <span>M</span></div>
+      <input type="range" id="mag-slider" min="10" max="100" value="40" step="1">
+    </div>
+    <div class="divider-v"></div>
+    <div class="ctrl">
+      <label>DEPTH</label>
+      <div class="val" id="depth-val">10 <span>km</span></div>
+      <input type="range" id="depth-slider" min="1" max="120" value="10" step="1">
+    </div>
+    <div class="divider-v"></div>
+    <div class="region-mini" id="region-mini"></div>
+    <button id="btn-clear" onclick="clearAll()">Clear all</button>
+  </div>
+</div>
+
+<script src="outline.js"></script>
+<script src="borders.js"></script>
+<script>
+// ── Sensors (user-placed, no limit) ──
+let REGIONS = [];
+let placeModeActive = false;
+
+const regionState = {};
+
+// ── Home location ──
+let homeLocation = null;   // { rx, ry } in map-relative coords
+let homeModeActive = false;
+let homePanelHoldUntil = 0;
+
+function toggleHomeMode(){
+  if(homeModeActive){ homeModeActive = false; _syncHomeModeUI(); return; }
+  // If sensor place mode is active, turn it off first
+  if(placeModeActive) togglePlaceMode();
+  homeModeActive = true;
+  _syncHomeModeUI();
+}
+
+function _syncHomeModeUI(){
+  const btn   = document.getElementById('btn-place-home');
+  const hint  = document.getElementById('place-home-hint');
+  const mapW  = document.getElementById('map-wrap');
+  const remBtn= document.getElementById('btn-remove-home');
+  if(homeModeActive){
+    btn.classList.add('active');
+    hint.style.display = 'block';
+    mapW.classList.add('place-mode');
+  } else {
+    btn.classList.remove('active');
+    hint.style.display = 'none';
+    if(!placeModeActive) mapW.classList.remove('place-mode');
+  }
+  // Show remove button only if home is placed
+  if(homeLocation){ remBtn.classList.add('visible'); btn.classList.add('has-home'); }
+  else             { remBtn.classList.remove('visible'); btn.classList.remove('has-home'); }
+}
+
+function removeHome(){
+  homeLocation = null;
+  homeModeActive = false;
+  _syncHomeModeUI();
+  hideHomePanel();
+}
+
+function hideHomePanel(){
+  clearHomeCountdowns();
+  document.getElementById('home-panel').classList.remove('visible');
+}
+
+// Shaking descriptions keyed by MMI label
+const HOME_DESC = {
+  '0':'Not felt',
+  '1':'Barely perceptible',
+  '2':'Weak shaking',
+  '3':'Weak — felt indoors',
+  '4':'Moderate shaking',
+  '5-':'Strong shaking expected',
+  '5+':'Strong shaking expected',
+  '6-':'Very strong shaking',
+  '6+':'Very strong shaking',
+  '7':'Extreme — severe damage',
+};
+
+// Countdown timers for P and S wave arrivals at home
+let homePCountdown = null, homeSCountdown = null, homeWarnFlash = null;
+let homeActiveMag = null; // tracks mag of quake currently driving the home panel
+
+function clearHomeCountdowns(){
+  if(homePCountdown){ clearInterval(homePCountdown); homePCountdown = null; }
+  if(homeSCountdown){ clearInterval(homeSCountdown); homeSCountdown = null; }
+  if(homeWarnFlash) { clearInterval(homeWarnFlash);  homeWarnFlash  = null; }
+  homeActiveMag = null;
+}
+
+function startWaveCountdown(elId, totalSec, col){
+  const el = document.getElementById(elId);
+  let remaining = totalSec;
+  function tick(){
+    if(remaining <= 0){
+      el.textContent = 'NOW';
+      el.style.color = col;
+      return;
+    }
+    el.textContent = remaining + 's';
+    remaining--;
+  }
+  tick();
+  return setInterval(tick, 1000);
+}
+
+function startWarnFlash(col){
+  const icon = document.getElementById('hp-warn-icon');
+  if(!icon) return null;
+  const tri = document.getElementById('hp-warn-tri');
+  if(tri) tri.setAttribute('fill', col);
+  let visible = true;
+  function tick(){
+    visible = !visible;
+    icon.style.opacity = visible ? '1' : '0.08';
+  }
+  return setInterval(tick, 500);
+}
+
+function stopWarnFlash(){
+  if(homeWarnFlash){ clearInterval(homeWarnFlash); homeWarnFlash = null; }
+  const icon = document.getElementById('hp-warn-icon');
+  if(icon){ icon.style.opacity = '1'; }
+}
+
+function updateHomePanel(){
+  if(!homeLocation || !intensityOverlayVisible || intensityHexes.length === 0) return;
+
+  const mapW = H * MAP_ASPECT;
+  const R    = mapW * 0.013;
+
+  const [hpx, hpy] = px(homeLocation.rx, homeLocation.ry);
+
+  // Find closest hex to home
+  let bestHex = null, bestDist = Infinity;
+  for(const h of intensityHexes){
+    const d = Math.hypot(h.px - hpx, h.py - hpy);
+    if(d < bestDist){ bestDist = d; bestHex = h; }
+  }
+
+  const threshold = 3.0;
+  if(!bestHex || bestDist > R * 2 || bestHex.intensity < threshold){
+    hideHomePanel();
+    return;
+  }
+
+  const intensity = bestHex.intensity;
+  const label = intensityLabel(intensity);
+  const col   = intensityColor(intensity);
+  const bgCol = intensityColorBg(intensity);
+
+  // Find the strongest triggering epicenter
+  let epicDist = null, epicMag = null, epicDepth = null, epicSpawnAt = null;
+  for(const r of ripples){
+    if(r.waveType !== 's') continue;
+    const distPx = Math.hypot(r.x - hpx, r.y - hpy);
+    const distKm = (distPx / mapW) * 700;
+    if(epicMag === null || r.mag > epicMag){
+      epicMag = r.mag; epicDist = distKm; epicDepth = r.depth; epicSpawnAt = r.spawnAt;
+    }
+  }
+  for(const e of epicenters){
+    const [ex,ey] = px(e.rx, e.ry);
+    const distPx = Math.hypot(ex - hpx, ey - hpy);
+    const distKm = (distPx / mapW) * 700;
+    if(epicMag === null || e.mag > epicMag){
+      epicMag = e.mag; epicDist = distKm; epicDepth = e.depth || null; epicSpawnAt = null;
+    }
+  }
+
+  // Wave arrival times derived from actual ripple speed (px/frame) and measured frame duration
+  // P speed: 0.09 px/frame, S speed: 0.063 px/frame
+  // arrivalTime = spawnAt + (distPx / speed) * avgMsPerFrame
+  let pSec = null, sSec = null;
+  if(epicDist !== null && epicSpawnAt !== null){
+    const distPx = (epicDist / 700) * mapW;
+    const pArrivalMs = epicSpawnAt + (distPx / 0.09) * avgMsPerFrame;
+    const sArrivalMs = epicSpawnAt + (distPx / 0.063) * avgMsPerFrame;
+    pSec = Math.max(0, Math.round((pArrivalMs - performance.now()) / 1000));
+    sSec = Math.max(0, Math.round((sArrivalMs - performance.now()) / 1000));
+  } else if(epicDist !== null){
+    const distPx = (epicDist / 700) * mapW;
+    pSec = Math.max(0, Math.round((distPx / 0.09) * avgMsPerFrame / 1000));
+    sSec = Math.max(0, Math.round((distPx / 0.063) * avgMsPerFrame / 1000));
+  }
+
+  // Show panel
+  const panel = document.getElementById('home-panel');
+  const wasVisible = panel.classList.contains('visible');
+  panel.classList.add('visible');
+  panel.style.borderColor = col;
+
+  const titleEl = document.getElementById('home-panel-title');
+  titleEl.style.color = col;
+  titleEl.style.borderColor = col + '88';
+  titleEl.style.background = bgCol.bg;
+
+  document.getElementById('hp-title-text').textContent = '⚠ Strong shaking expected';
+
+  const mgEl = document.getElementById('hp-mag');
+  mgEl.textContent = epicMag !== null ? 'M' + epicMag.toFixed(1) : '—';
+  mgEl.style.background = epicMag !== null ? avBgFromMag(epicMag) : '#30363d';
+  mgEl.style.color = '#0d1117';
+
+  const mmiEl = document.getElementById('home-panel-mmi-val');
+  mmiEl.textContent = label;
+  mmiEl.style.color = col;
+
+  // Keep icon color in sync with intensity (flash timer manages opacity separately)
+  const warnIcon = document.getElementById('hp-warn-icon');
+  const warnTri  = document.getElementById('hp-warn-tri');
+  if(warnTri && !homeWarnFlash){ warnTri.setAttribute('fill', col); }
+
+  document.getElementById('hp-dist').textContent =
+    epicDist !== null ? epicDist.toFixed(1) + ' km' : '—';
+  document.getElementById('hp-depth').textContent =
+    epicDepth !== null ? epicDepth + ' km' : '—';
+
+  // Start/restart countdowns when panel first appears OR a stronger quake hits
+  const isNewOrStronger = !wasVisible || (epicMag !== null && (homeActiveMag === null || epicMag > homeActiveMag));
+  if(isNewOrStronger && pSec !== null){
+    clearHomeCountdowns();
+    homeActiveMag = epicMag;
+    const pwEl = document.getElementById('hp-pwave');
+    const swEl = document.getElementById('hp-swave');
+    pwEl.style.color = '#8b949e';
+    swEl.style.color = '#f0883e';
+
+    // Start warning icon flashing (stops when S-wave arrives)
+    homeWarnFlash = startWarnFlash(col);
+
+    homePCountdown = startWaveCountdown('hp-pwave', pSec, '#e6edf3');
+
+    // S-wave countdown — stop flash when it hits 0
+    const swEl2 = document.getElementById('hp-swave');
+    let sRemaining = sSec;
+    function sTick(){
+      if(sRemaining <= 0){
+        swEl2.textContent = 'NOW';
+        swEl2.style.color = col;
+        stopWarnFlash();
+        // Set icon to solid after arrival
+        const icon = document.getElementById('hp-warn-icon');
+        const tri2 = document.getElementById('hp-warn-tri');
+        if(icon){ icon.style.opacity = '1'; }
+        if(tri2){ tri2.setAttribute('fill', col); }
+        return;
+      }
+      swEl2.textContent = sRemaining + 's';
+      sRemaining--;
+    }
+    sTick();
+    homeSCountdown = setInterval(sTick, 1000);
+
+  } else if(isNewOrStronger){
+    document.getElementById('hp-pwave').textContent = '—';
+    document.getElementById('hp-swave').textContent = '—';
+    // Update icon color without flash if no timing data
+    const icon = document.getElementById('hp-warn-icon');
+    const triEl = document.getElementById('hp-warn-tri');
+    if(icon){ icon.style.opacity = '1'; }
+    if(triEl){ triEl.setAttribute('fill', col); }
+  }
+
+  positionHomePanel();
+}
+
+function avBgFromMag(m){
+  if(m < 2)   return '#58a6ff';
+  if(m < 3)   return '#3fb950';
+  if(m < 3.5) return '#e3b341';
+  if(m < 4.5) return '#f0883e';
+  if(m < 6)   return '#cc6a1e';
+  if(m < 6.5) return '#f85149';
+  if(m < 7)   return '#b22222';
+  return '#9d4edd';
+}
+
+function positionHomePanel(){
+  // Place to the right of zoom controls, same bottom row
+  const zc = document.getElementById('zoom-controls');
+  const wRect = wrap.getBoundingClientRect();
+  const zcRect = zc.getBoundingClientRect();
+  const panel = document.getElementById('home-panel');
+  panel.style.bottom = (wRect.bottom - zcRect.bottom) + 'px';
+  panel.style.left   = (zcRect.right - wRect.left + 8) + 'px';
+}
+
+function togglePlaceMode(){
+  placeModeActive = !placeModeActive;
+  const btn = document.getElementById('btn-place-sensors');
+  const hint = document.getElementById('place-mode-hint');
+  const wrap = document.getElementById('map-wrap');
+  const undoBtn = document.getElementById('btn-undo-sensor');
+  if(placeModeActive){
+    btn.classList.add('active');
+    hint.classList.add('visible');
+    wrap.classList.add('place-mode');
+    undoBtn.classList.add('visible');
+  } else {
+    btn.classList.remove('active');
+    hint.classList.remove('visible');
+    wrap.classList.remove('place-mode');
+    if(REGIONS.length === 0) undoBtn.classList.remove('visible');
+  }
+}
+
+function placeSensor(rx, ry){
+  const idx = REGIONS.length + 1;
+  const name = 'S' + idx;
+  REGIONS.push({ name, rx, ry });
+  regionState[name] = { mag: null, depth: null };
+  updateSensorBadge();
+  updateRegionMini();
+}
+
+function undoLastSensor(){
+  if(REGIONS.length === 0) return;
+  const removed = REGIONS.pop();
+  delete regionState[removed.name];
+  updateSensorBadge();
+  updateRegionMini();
+  if(REGIONS.length === 0){
+    document.getElementById('btn-undo-sensor').classList.remove('visible');
+  }
+}
+
+function updateSensorBadge(){
+  document.getElementById('sensor-count-badge').textContent = REGIONS.length + ' placed';
+}
+
+const canvas = document.getElementById('map-canvas');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('map-wrap');
+let W = 0, H = 0;
+let ripples = [], epicenters = [], totalCount = 0, maxMag = 0;
+let sensorFlashes = [];
+
+// ── Zoom / pan ──
+let zoom = 1, panX = 0, panY = 0;
+let isPanning = false, panStartX = 0, panStartY = 0, panStartPanX = 0, panStartPanY = 0;
+let mouseDownPos = {x:0, y:0};
+const ZOOM_MIN = 1, ZOOM_MAX = 12;
+
+const MAP_ASPECT = 603.48889 / 814.17407;
+
+function px(rx, ry){
+  const mapW = H * MAP_ASPECT;
+  return [rx * mapW, ry * H];
+}
+
+function screenToMap(sx, sy){
+  const ox = W - H * MAP_ASPECT;
+  const mapW = H * MAP_ASPECT;
+  return [(sx - ox - panX) / zoom / mapW, (sy - panY) / zoom / H];
+}
+
+function getTransform(){
+  const ox = W - H * MAP_ASPECT;
+  return { a:zoom, b:0, c:0, d:zoom, e:ox+panX, f:panY };
+}
+
+function clampPan(){
+  if(zoom <= 1){ panX = 0; panY = 0; return; }
+  const mapW = H * MAP_ASPECT;
+  panX = Math.min(0, Math.max(-(mapW * zoom - mapW), panX));
+  panY = Math.min(0, Math.max(-(H * zoom - H), panY));
+}
+
+function zoomBy(factor, cx, cy){
+  const ox = W - H * MAP_ASPECT;
+  const mapW = H * MAP_ASPECT;
+  if(cx === undefined){ cx = ox + mapW / 2; cy = H / 2; }
+  const newZoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, zoom * factor));
+  panX = cx - ox - (cx - ox - panX) * (newZoom / zoom);
+  panY = cy - (cy - panY) * (newZoom / zoom);
+  zoom = newZoom;
+  clampPan();
+  document.getElementById('zoom-level').textContent = zoom.toFixed(1) + '×';
+}
+
+function resetZoom(){
+  zoom = 1; panX = 0; panY = 0;
+  document.getElementById('zoom-level').textContent = '1×';
+}
+
+let zoomAnim = null;
+function smoothZoomTo(targetCx, targetCy, targetZoom, durationMs, onComplete){
+  if(zoomAnim) cancelAnimationFrame(zoomAnim);
+  const startZoom = zoom, startPanX = panX, startPanY = panY;
+  const ox = W - H * MAP_ASPECT;
+  const mapW = H * MAP_ASPECT;
+  const tPanX = (W/2 - ox) - (targetCx - ox - startPanX) * (targetZoom / startZoom);
+  const tPanY = H/2 - (targetCy - startPanY) * (targetZoom / startZoom);
+  const startTime = performance.now();
+  function ease(t){ return t<0.5 ? 2*t*t : -1+(4-2*t)*t; }
+  function step(now){
+    const t = Math.min(1, (now - startTime) / durationMs);
+    const e = ease(t);
+    zoom = startZoom + (targetZoom - startZoom) * e;
+    panX = startPanX + (tPanX - startPanX) * e;
+    panY = startPanY + (tPanY - startPanY) * e;
+    clampPan();
+    document.getElementById('zoom-level').textContent = zoom.toFixed(1) + '×';
+    if(t < 1) zoomAnim = requestAnimationFrame(step);
+    else { zoomAnim = null; if(onComplete) onComplete(); }
+  }
+  zoomAnim = requestAnimationFrame(step);
+}
+
+let alertPeakMag = 0, alertHoldUntil = 0;
+
+let tsunamiWarnings = [];
+let coastLevels = [];
+let coastVisible = true;
+let intensityHexes = [];
+let intensityOverlayVisible = false;
+let intensityOverlayMeta = null;
+let intensityOverlayAlpha = 0;
+
+const TSUNAMI_MIN_MAG   = 6.5;
+const TSUNAMI_MAX_DEPTH = 70;
+const TSUNAMI_DELAY_MS  = 45000;
+
+const TSUNAMI_COLORS = {
+  yellow: { stroke:'#e3b341', glow:'rgba(227,179,65,0.4)',  lw:3   },
+  red:    { stroke:'#f85149', glow:'rgba(248,81,73,0.4)',   lw:3.5 },
+  purple: { stroke:'#c792ea', glow:'rgba(199,146,234,0.5)', lw:4   },
+};
+
+function intensityLabel(i){
+  if(i < 1)   return '0';
+  if(i < 2)   return '1';
+  if(i < 3)   return '2';
+  if(i < 4)   return '3';
+  if(i < 5)   return '4';
+  if(i < 5.5) return '5-';
+  if(i < 6)   return '5+';
+  if(i < 6.5) return '6-';
+  if(i < 7)   return '6+';
+  return       '7';
+}
+
+function intensityColor(i){
+  if(i < 1)   return '#8b949e';   // imperceptible → grey
+  if(i < 2)   return '#58a6ff';   // very weak     → blue
+  if(i < 3)   return '#3fb950';   // weak          → green
+  if(i < 3.8) return '#e3b341';   // moderate      → yellow
+  if(i < 4.8) return '#f0883e';   // strong        → orange
+  if(i < 5.8) return '#cc6a1e';   // very strong   → dark orange
+  if(i < 6.5) return '#f85149';   // severe        → red
+  if(i < 7)   return '#b22222';   // violent       → dark red
+  return       '#9d4edd';          // extreme       → purple
+}
+
+function intensityColorBg(i){
+  if(i < 1)   return {bg:'#1c1f24', fg:'#6e7681'};
+  if(i < 2)   return {bg:'#0c2040', fg:'#58a6ff'};
+  if(i < 3)   return {bg:'#0c2010', fg:'#3fb950'};
+  if(i < 3.5) return {bg:'#2a1e00', fg:'#e3b341'};
+  if(i < 4.5) return {bg:'#2a1500', fg:'#f0883e'};
+  if(i < 5.5) return {bg:'#1f0e00', fg:'#cc6a1e'};
+  if(i < 6.5) return {bg:'#2a0800', fg:'#f85149'};
+  if(i < 7)   return {bg:'#1a0000', fg:'#b22222'};
+  return               {bg:'#1a0a2e', fg:'#9d4edd'};
+}
+
+function avClass(i){
+  if(i === null) return 'av-grey';
+  if(i < 1)      return 'av-grey';
+  if(i < 2)      return 'av-blue';
+  if(i < 3)      return 'av-green';
+  if(i < 3.5)    return 'av-yellow';
+  if(i < 4.5)    return 'av-orange';
+  if(i < 6)      return 'av-orange-dark';
+  if(i < 6.5)    return 'av-red';
+  if(i < 7)      return 'av-red-dark';
+  return          'av-purple';
+}
+
+function lerpColor(a,b,t){
+  const ah=a.replace('#',''), bh=b.replace('#','');
+  const ar=parseInt(ah.slice(0,2),16), ag=parseInt(ah.slice(2,4),16), ab_=parseInt(ah.slice(4,6),16);
+  const br=parseInt(bh.slice(0,2),16), bg=parseInt(bh.slice(2,4),16), bb=parseInt(bh.slice(4,6),16);
+  return'#'+[Math.round(ar+(br-ar)*t),Math.round(ag+(bg-ag)*t),Math.round(ab_+(bb-ab_)*t)]
+    .map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+
+function magColor(i){
+  if(i === null || i < 0.8) return {hex:'#6e7681'};
+  const stops=[
+    {v:1.0, hex:'#58a6ff'},
+    {v:2.0, hex:'#58a6ff'},
+    {v:3.0, hex:'#3fb950'},
+    {v:3.5, hex:'#e3b341'},
+    {v:4.5, hex:'#f0883e'},
+    {v:5.5, hex:'#cc6a1e'},
+    {v:6.5, hex:'#f85149'},
+    {v:7.0, hex:'#b22222'},
+    {v:9.0, hex:'#9d4edd'},
+  ];
+  if(i <= stops[0].v) return {hex:stops[0].hex};
+  if(i >= stops[stops.length-1].v) return {hex:stops[stops.length-1].hex};
+  for(let k=0; k<stops.length-1; k++){
+    if(i >= stops[k].v && i <= stops[k+1].v){
+      const t=(i-stops[k].v)/(stops[k+1].v-stops[k].v);
+      return {hex:lerpColor(stops[k].hex, stops[k+1].hex, t)};
+    }
+  }
+  return {hex:'#9d4edd'};
+}
+
+function pointInPolygon(rx, ry){
+  let inside = false;
+  for(let i=0, j=OUTLINE.length-1; i<OUTLINE.length; j=i++){
+    const xi=OUTLINE[i][0], yi=OUTLINE[i][1];
+    const xj=OUTLINE[j][0], yj=OUTLINE[j][1];
+    if(((yi>ry)!==(yj>ry))&&(rx<(xj-xi)*(ry-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+
+function tsunamiEffMag(epicMag, distNorm){
+  // Decay rate shrinks as magnitude grows so large quakes stay dangerous
+  // much further from the epicenter, producing wide tiered warning zones.
+  // M6.5 → fast decay (small zone); M8 → moderate; M10 → very slow decay.
+  const decayRate = 3.5 / (1 + Math.max(0, epicMag - 6.0) * 0.45);
+  return epicMag * Math.exp(-distNorm * decayRate);
+}
+
+const BFS_RES = 500;
+let bfsLandMask = null;
+let outlineGridCells = null;
+
+function buildBfsLandMask(){
+  bfsLandMask = new Uint8Array(BFS_RES * BFS_RES);
+  for(let gy=0; gy<BFS_RES; gy++){
+    for(let gx=0; gx<BFS_RES; gx++){
+      const rx=(gx+0.5)/BFS_RES, ry=(gy+0.5)/BFS_RES;
+      if(pointInPolygon(rx,ry)) bfsLandMask[gy*BFS_RES+gx]=1;
+    }
+  }
+  outlineGridCells = OUTLINE.map(([rx,ry])=>{
+    const gx=Math.min(BFS_RES-1,Math.max(0,Math.floor(rx*BFS_RES)));
+    const gy=Math.min(BFS_RES-1,Math.max(0,Math.floor(ry*BFS_RES)));
+    if(!bfsLandMask[gy*BFS_RES+gx]) return gy*BFS_RES+gx;
+    for(let r=1; r<30; r++){
+      for(let dy=-r; dy<=r; dy++){
+        for(let dx=-r; dx<=r; dx++){
+          if(Math.abs(dx)!==r && Math.abs(dy)!==r) continue;
+          const nx=gx+dx, ny=gy+dy;
+          if(nx<0||ny<0||nx>=BFS_RES||ny>=BFS_RES) continue;
+          if(!bfsLandMask[ny*BFS_RES+nx]) return ny*BFS_RES+nx;
+        }
+      }
+    }
+    return gy*BFS_RES+gx;
+  });
+}
+
+function bfsWaterDist(epicRx, epicRy){
+  if(!bfsLandMask) buildBfsLandMask();
+  const N = BFS_RES * BFS_RES;
+  const dist = new Float32Array(N).fill(Infinity);
+  const visited = new Uint8Array(N);
+  const cellW = 1/BFS_RES;
+
+  let sx=Math.min(BFS_RES-1,Math.max(0,Math.floor(epicRx*BFS_RES)));
+  let sy=Math.min(BFS_RES-1,Math.max(0,Math.floor(epicRy*BFS_RES)));
+  if(bfsLandMask[sy*BFS_RES+sx]){
+    outer: for(let r=1; r<20; r++){
+      for(let dy=-r; dy<=r; dy++){
+        for(let dx=-r; dx<=r; dx++){
+          if(Math.abs(dx)!==r&&Math.abs(dy)!==r) continue;
+          const nx=sx+dx, ny=sy+dy;
+          if(nx<0||ny<0||nx>=BFS_RES||ny>=BFS_RES) continue;
+          if(!bfsLandMask[ny*BFS_RES+nx]){sx=nx;sy=ny;break outer;}
+        }
+      }
+    }
+  }
+
+  // Min-heap Dijkstra - entries [dist, cellIndex]
+  // Required because diagonal moves cost 1.414 vs 1.0 for cardinal moves.
+  // The old BFS queue produced wrong distances for non-uniform edge costs.
+  const heap = [[0, sy*BFS_RES+sx]];
+  dist[sy*BFS_RES+sx] = 0;
+
+  function heapPush(d, i){
+    heap.push([d,i]);
+    let k=heap.length-1;
+    while(k>0){
+      const p=(k-1)>>1;
+      if(heap[p][0]<=heap[k][0]) break;
+      [heap[p],heap[k]]=[heap[k],heap[p]]; k=p;
+    }
+  }
+  function heapPop(){
+    const top=heap[0];
+    const last=heap.pop();
+    if(heap.length>0){ heap[0]=last; let k=0;
+      while(true){
+        const l=2*k+1, r=2*k+2;
+        let s=k;
+        if(l<heap.length&&heap[l][0]<heap[s][0]) s=l;
+        if(r<heap.length&&heap[r][0]<heap[s][0]) s=r;
+        if(s===k) break;
+        [heap[s],heap[k]]=[heap[k],heap[s]]; k=s;
+      }
+    }
+    return top;
+  }
+
+  const DIRS=[[-1,0,1],[1,0,1],[0,-1,1],[0,1,1],
+              [-1,-1,1.414],[1,-1,1.414],[-1,1,1.414],[1,1,1.414]];
+
+  while(heap.length>0){
+    const [cd, ci]=heapPop();
+    if(visited[ci]) continue;
+    visited[ci]=1;
+    const cx=ci%BFS_RES, cy=(ci/BFS_RES)|0;
+    for(const [dx,dy,cost] of DIRS){
+      const nx=cx+dx, ny=cy+dy;
+      if(nx<0||ny<0||nx>=BFS_RES||ny>=BFS_RES) continue;
+      const ni=ny*BFS_RES+nx;
+      if(bfsLandMask[ni]||visited[ni]) continue;
+      const nd=cd+cost*cellW;
+      if(nd<dist[ni]){ dist[ni]=nd; heapPush(nd,ni); }
+    }
+  }
+  return dist;
+}
+
+function hasWaterLOS(rx0, ry0, rx1, ry1){
+  const steps=Math.max(4,Math.min(60,Math.ceil(Math.sqrt((rx1-rx0)**2+(ry1-ry0)**2)*BFS_RES*1.5)));
+  for(let k=1; k<steps-1; k++){
+    const t=k/(steps-1);
+    const gx=Math.min(BFS_RES-1,Math.max(0,Math.floor((rx0+(rx1-rx0)*t)*BFS_RES)));
+    const gy=Math.min(BFS_RES-1,Math.max(0,Math.floor((ry0+(ry1-ry0)*t)*BFS_RES)));
+    if(bfsLandMask[gy*BFS_RES+gx]) return false;
+  }
+  return true;
+}
+
+function computeCoastLevels(){
+  if(!bfsLandMask) buildBfsLandMask();
+  coastLevels = Array.from({length: OUTLINE.length}, ()=>new Set());
+  for(const tw of tsunamiWarnings){
+    if(!tw.issued) continue;
+    const dist = bfsWaterDist(tw.rx, tw.ry);
+    for(let i=0; i<OUTLINE.length; i++){
+      const bfsDist = dist[outlineGridCells[i]];
+      if(bfsDist === Infinity) continue;
+      const eff = tsunamiEffMag(tw.mag, bfsDist);
+      // Use absolute effective magnitude thresholds so larger quakes
+      // produce wider warning zones — not just brighter colours.
+      // Calibrated so M6.5 → small yellow zone; M7.5 → yellow+red;
+      // M8.5+ → all three tiers with purple reaching much further.
+      if(eff >= 4.0) coastLevels[i].add('yellow');
+      if(eff >= 5.2) coastLevels[i].add('red');
+      if(eff >= 6.4) coastLevels[i].add('purple');
+    }
+  }
+}
+
+function startCoastFlash(){
+  coastVisible=false;
+  let flashes=0;
+  const interval=setInterval(()=>{
+    flashes++;
+    coastVisible=!coastVisible;
+    if(flashes>=6){ clearInterval(interval); coastVisible=true; }
+  }, 300);
+}
+
+function positionTsunamiPanel(){
+  const ap=document.getElementById('alert-panel');
+  const tp=document.getElementById('tsunami-panel');
+  const apRect=ap.getBoundingClientRect();
+  const wRect=wrap.getBoundingClientRect();
+  tp.style.top=(apRect.bottom-wRect.top+6)+'px';
+}
+
+function positionLegend(){
+  const ap=document.getElementById('alert-panel');
+  const tp=document.getElementById('tsunami-panel');
+  const lp=document.getElementById('intensity-legend');
+  const wRect=wrap.getBoundingClientRect();
+  const apRect=ap.getBoundingClientRect();
+  let bottom = apRect.bottom;
+  if(tp.classList.contains('visible')){
+    const tpRect=tp.getBoundingClientRect();
+    if(tpRect.height > 0) bottom = tpRect.bottom;
+  }
+  lp.style.top=(bottom-wRect.top+6)+'px';
+}
+
+function updateTsunamiPanel(){
+  const active=tsunamiWarnings.filter(tw=>tw.issued);
+  const panel=document.getElementById('tsunami-panel');
+  if(active.length===0){ panel.classList.remove('visible'); setTimeout(positionLegend, 0); return; }
+
+  let hasY=false, hasR=false, hasP=false;
+  for(const s of coastLevels){
+    if(s.has('yellow')) hasY=true;
+    if(s.has('red'))    hasR=true;
+    if(s.has('purple')) hasP=true;
+  }
+
+  const topLabel=hasP?'MAJOR':hasR?'WARNING':'ADVISORY';
+  const topColor=hasP?'#c792ea':hasR?'#f85149':'#e3b341';
+  const topBg   =hasP?'#1e0a2e':hasR?'#2a0800':'#2a2200';
+
+  panel.classList.add('visible');
+  positionTsunamiPanel();
+  // positionLegend must come after positionTsunamiPanel so tp top is set
+  setTimeout(positionLegend, 0);
+  document.getElementById('ts-title').style.color=topColor;
+  document.getElementById('ts-badge').textContent=topLabel;
+  document.getElementById('ts-badge').style.background=topBg;
+  document.getElementById('ts-badge').style.color=topColor;
+
+  // Determine highest level reached across all active warnings
+  const prevLevel = active.reduce((max, tw) => {
+    const l = tw.tsunamiSoundLevel || 0;
+    return l > max ? l : max;
+  }, 0);
+  // level 3 = purple (major), 2 = red (warning), 1 = yellow (watch)
+  const newLevel = hasP ? 3 : hasR ? 2 : hasY ? 1 : 0;
+
+  const strongest=active.reduce((a,b)=>a.mag>b.mag?a:b);
+  document.getElementById('ts-info').textContent=active.length+' active warning'+(active.length>1?'s':'');
+  document.getElementById('ts-source').textContent='M'+strongest.mag.toFixed(1)+' submarine · '+strongest.depth+'km depth';
+
+  const lvlStyle=(on,bg,col,bdr)=>on
+    ? `background:${bg};color:${col};border:0.5px solid ${bdr}`
+    : 'background:#21262d;color:#484f58;border:0.5px solid #30363d';
+  document.getElementById('tsl-yellow').style.cssText=lvlStyle(hasY,'#2a2200','#e3b341','#e3b34188');
+  document.getElementById('tsl-red'   ).style.cssText=lvlStyle(hasR,'#2a0800','#f85149','#f8514988');
+  document.getElementById('tsl-purple').style.cssText=lvlStyle(hasP,'#1e0a2e','#c792ea','#c792ea88');
+
+  // Play audio after DOM is fully updated so sound coincides with visible warning
+  if(newLevel > prevLevel){
+    active.forEach(tw => { tw.tsunamiSoundLevel = newLevel; });
+    if(newLevel === 3){
+      const a = new Audio('sounds/major_tsunami_warning.mp3'); a.volume = 0.1; a.play();
+    } else if(newLevel === 2){
+      const a = new Audio('sounds/tsunami_warning.mp3'); a.volume = 0.1; a.play();
+    } else if(newLevel === 1){
+      const a = new Audio('sounds/tsunami_watch.mp3'); a.volume = 0.1; a.play();
+    }
+  }
+}
+
+function resize(){
+  W=wrap.clientWidth; H=wrap.clientHeight;
+  canvas.width=W; canvas.height=H;
+}
+
+function getMag(){ return Math.round(parseInt(document.getElementById('mag-slider').value))/10; }
+function getDepth(){ return parseInt(document.getElementById('depth-slider').value); }
+
+document.getElementById('mag-slider').oninput=()=>{
+  document.getElementById('mag-val').innerHTML=getMag().toFixed(1)+' <span>M</span>';
+};
+document.getElementById('depth-slider').oninput=()=>{
+  document.getElementById('depth-val').innerHTML=getDepth()+' <span>km</span>';
+};
+
+function feltMag(epicMag, distPx, depth){
+  const mapW=H*MAP_ASPECT;
+  const distKm=(distPx/mapW)*700;
+  const hypo=Math.max(8, Math.sqrt(distKm*distKm+depth*depth));
+  // Log term handles near-field decay (gives color rings for small/medium quakes)
+  // Linear term only bites beyond ~40km so large quakes don't flood the map
+  // Scale factor reduces attenuation exponentially for large quakes
+  const scaleFactor = 1.1 + epicMag * 0.14 * Math.pow(0.88, Math.max(0, epicMag - 5));
+  const linear = Math.max(0, distKm - 40) * (0.012 / (1 + Math.max(0, epicMag - 5) * 0.18));
+  const att = Math.log10(Math.max(hypo, 1)) * scaleFactor + linear;
+  return Math.max(0, epicMag - att);
+}
+
+function showAlert(data){
+  const now=performance.now();
+  if(now<alertHoldUntil && data.mainMag<=alertPeakMag) return;
+  if(data.mainMag>=alertPeakMag){ alertPeakMag=data.mainMag; alertHoldUntil=now+60000; }
+  const col=intensityColor(data.mainMag);
+  document.getElementById('al-title').textContent='M'+data.mainMag.toFixed(1)+' Detected';
+  document.getElementById('al-title').style.color=col;
+  document.getElementById('al-shock').textContent=data.estimated ? 'Est.' : '';
+  document.getElementById('al-mmi').textContent=intensityLabel(data.mainMag);
+  document.getElementById('al-mmi').style.color=col;
+  document.getElementById('al-loc').textContent=data.loc;
+  document.getElementById('al-loc').style.color='#e6edf3';
+  document.getElementById('al-time').textContent=data.time;
+  document.getElementById('al-depth').textContent='Depth: '+data.depth+'km';
+  const fe=document.getElementById('al-fore');
+  if(data.foreMag!=null){ fe.textContent='M'+data.foreMag.toFixed(1); fe.className='av '+avClass(data.foreMag); }
+  else { fe.textContent='—'; fe.className='av av-grey'; }
+  const me=document.getElementById('al-main');
+  me.textContent='M'+data.mainMag.toFixed(1);
+  me.className='av '+avClass(data.mainMag);
+  const ae=document.getElementById('al-after');
+  ae.textContent='—'; ae.className='av av-grey';
+  const de=document.getElementById('al-depthv');
+  de.textContent=data.depth+'km'; de.className='av av-grey';
+}
+
+function clearAlert(){
+  alertPeakMag=0; alertHoldUntil=0;
+  document.getElementById('al-title').textContent='No earthquake warning';
+  document.getElementById('al-title').style.color='#484f58';
+  document.getElementById('al-shock').textContent='';
+  document.getElementById('al-mmi').textContent='—';
+  document.getElementById('al-mmi').style.color='#484f58';
+  document.getElementById('al-loc').textContent='—';
+  document.getElementById('al-loc').style.color='#484f58';
+  document.getElementById('al-time').textContent='—';
+  document.getElementById('al-depth').textContent='—';
+  ['al-fore','al-main','al-after','al-depthv'].forEach(id=>{
+    const e=document.getElementById(id); e.textContent='—'; e.className='av av-grey';
+  });
+}
+
+function updateRegionMini(){
+  const el=document.getElementById('region-mini');
+  el.innerHTML='';
+  REGIONS.forEach(r=>{
+    const s=regionState[r.name];
+    const dm = s ? (s.pMag != null ? s.pMag : s.mag) : null;
+    const col=dm && dm>=0.8 ? intensityColor(dm) : '#30363d';
+    const d=document.createElement('div');
+    d.className='rm-item';
+    d.innerHTML=`<div class="rm-dot" style="background:${col}"></div><span style="font-size:9px;color:${dm && dm>=0.8?col:'#484f58'}">${r.name}</span>`;
+    el.appendChild(d);
+  });
+}
+
+let pendingEpicenters = [];
+
+let orangeSoundPlayed = false;
+let greenSoundPlayed = false;
+
+function playOrangeSound(){
+  const audio = new Audio('sounds/strong_earthquake_warning.mp3');
+  audio.volume = 0.1;
+  audio.play();
+}
+
+function playGreenSound(){
+  const audio = new Audio('sounds/earthquake_warning_small.mp3');
+  audio.volume = 0.1;
+  audio.play();
+}
+
+function spawnQuakeSequence(rx, ry, mainMag, depth){
+  orangeSoundPlayed = false;
+  greenSoundPlayed = false;
+  const now=performance.now();
+  const onLand=pointInPolygon(rx,ry);
+  const [ex,ey]=px(rx,ry);
+  const mapW=H*MAP_ASPECT;
+  const maxR=Math.max(mapW,H)*1.2;
+  const COOLDOWN_MS = 2000;
+  const waveStartAt = now + COOLDOWN_MS;
+
+  pendingEpicenters.push({x:ex, y:ey, mag:mainMag, spawnAt:now, fadeUntil:waveStartAt});
+
+  const pColor = mainMag >= 5 ? '58,166,255' : '147,210,255';
+  const pWave = {
+    x:ex, y:ey, mag:mainMag, depth,
+    waveType:'p',
+    progress:0, maxR, speed:0.09,
+    color:pColor,
+    spawnAt:waveStartAt,
+    hidden:true,
+    sensorHits:0,
+    sensorDetectPlayed:false,
+    regionTriggers:REGIONS.map(r=>{ const[rx2,ry2]=px(r.rx,r.ry); return{name:r.name,dist:Math.hypot(rx2-ex,ry2-ey),sx:rx2,sy:ry2,triggered:false}; }),
+    feedLogged:false, done:false
+  };
+
+  function sColor(m){
+    if(m<2)   return '63,185,80';
+    if(m<3)   return '130,200,80';
+    if(m<3.5) return '227,179,65';
+    if(m<4.5) return '240,136,62';
+    if(m<5.5) return '204,106,30';
+    if(m<6.5) return '248,81,73';
+    if(m<7)   return '178,34,34';
+    return            '139,0,0';
+  }
+  const sWave = {
+    x:ex, y:ey, mag:mainMag, depth,
+    waveType:'s',
+    progress:0, maxR, speed:0.09*0.7,
+    color:sColor(mainMag),
+    spawnAt:waveStartAt,
+    hidden:true,
+    sensorHits:0,
+    sensorDetectPlayed:false,
+    regionTriggers:REGIONS.map(r=>{ const[rx2,ry2]=px(r.rx,r.ry); return{name:r.name,dist:Math.hypot(rx2-ex,ry2-ey),sx:rx2,sy:ry2,triggered:false}; }),
+    feedLogged:false, done:false
+  };
+
+  const revealState = {hits:0, revealed:false, zoomFinished:false};
+  pWave.revealState = revealState;
+  sWave.revealState = revealState;
+
+  ripples.push(pWave, sWave);
+
+  pWave.epicenterData = {x:ex, y:ey, rx, ry, mag:mainMag, isSea:!onLand};
+
+  totalCount++; if(mainMag>maxMag) maxMag=mainMag;
+  document.getElementById('stat-count').textContent=totalCount;
+  document.getElementById('stat-max').textContent='M'+maxMag.toFixed(1);
+
+  if(!onLand && mainMag>=TSUNAMI_MIN_MAG && depth<=TSUNAMI_MAX_DEPTH){
+    const tw={rx, ry, mag:mainMag, depth, issued:false, timerStarted:false};
+    tsunamiWarnings.push(tw);
+    pWave.tsunamiRef=tw;
+    sWave.tsunamiRef=tw;
+  }
+}
+
+function addFeedEntry(regionName, feltM, depth){
+  const now2=new Date();
+  const ts=now2.getHours().toString().padStart(2,'0')+':'+now2.getMinutes().toString().padStart(2,'0')+':'+now2.getSeconds().toString().padStart(2,'0');
+  const col=intensityColorBg(feltM);
+  const magCls=intensityColor(feltM);
+  const item=document.createElement('div');
+  item.className='feed-item';
+  item.innerHTML=`
+    <div class="fi-mmi" style="background:${col.bg};color:${col.fg}">${intensityLabel(feltM)}</div>
+    <div class="fi-loc">${regionName}</div>
+    <div class="fi-depth">${depth}km depth · ${ts}</div>
+    <div class="fi-mag" style="color:${magCls}">M${feltM.toFixed(1)}</div>
+  `;
+  const feed=document.getElementById('feed');
+  feed.insertBefore(item,feed.firstChild);
+  if(feed.children.length>50) feed.removeChild(feed.lastChild);
+}
+
+
+function generateIntensityOverlay(epicRx, epicRy, epicMag, depth){
+  intensityHexes = [];
+  const hexR = 0.012;
+  const hexH = Math.sqrt(3) * hexR;
+
+  for(let row=0, ry=0; ry<=1; row++, ry += hexH*0.75){
+    const offset = (row % 2) ? hexR*0.5 : 0;
+    for(let rx=offset; rx<=1; rx += hexR){
+      if(!pointInPolygon(rx, ry)) continue;
+
+      const [ex,ey] = px(epicRx, epicRy);
+      const [hx,hy] = px(rx, ry);
+
+      const intensity = feltMag(
+        epicMag,
+        Math.hypot(hx-ex, hy-ey),
+        depth
+      );
+
+      if(intensity < 0.8) continue;
+
+      intensityHexes.push({
+        rx, ry,
+        intensity
+      });
+    }
+  }
+
+  intensityOverlayVisible = true;
+}
+
+
+function hexPoints(cx, cy, R){
+  // Flat-top: first vertex points straight right
+  const pts = [];
+  for(let i = 0; i < 6; i++){
+    const a = Math.PI / 3 * i;
+    pts.push([cx + Math.cos(a) * R, cy + Math.sin(a) * R]);
+  }
+  return pts;
+}
+
+function buildIntensityOverlay(epicRx, epicRy, epicMag, depth){
+  intensityOverlayMeta = { epicRx, epicRy, epicMag, depth, createdAt: performance.now() };
+  // Don't reset — merge with existing hexes, keeping highest intensity
+  const existingMap = new Map();
+  intensityHexes.forEach(h => existingMap.set(`${Math.round(h.px)},${Math.round(h.py)}`, h));
+  const newHexes = [];
+  intensityOverlayVisible = true;
+  intensityOverlayAlpha = 0;
+
+  if(!bfsLandMask) buildBfsLandMask();
+
+  const mapW = H * MAP_ASPECT;
+
+  // Flat-top honeycomb tiling:
+  // circumradius R (center to vertex)
+  // colStep = R * 1.5        (horizontal distance between adjacent column centers)
+  // rowStep = R * sqrt(3)    (vertical distance between centers in the same column)
+  // odd columns are shifted down by rowStep * 0.5
+  const R       = mapW * 0.013;
+  const colStep = R * 1.5;
+  const rowStep = R * Math.sqrt(3);
+
+  const [ex, ey] = px(epicRx, epicRy);
+
+  // Find the hex closest to the epicenter to force-color it with epicMag
+  let closestHex = null, closestDist = Infinity;
+
+  let col = 0;
+  for(let hx = 0; hx <= mapW + R; hx += colStep, col++){
+    const yOffset = (col % 2) ? rowStep * 0.5 : 0;
+    for(let hy = yOffset; hy <= H + R; hy += rowStep){
+      const rx = hx / mapW;
+      const ry = hy / H;
+      if(!pointInPolygon(rx, ry)) continue;
+
+      const dist = Math.hypot(hx - ex, hy - ey);
+      const intensity = feltMag(epicMag, dist, depth);
+      if(intensity < 0.8) continue;
+
+      const isGrey = intensity < 1.2;
+      const key = `${Math.round(hx)},${Math.round(hy)}`;
+      const existing = existingMap.get(key);
+      if(existing && existing.intensity >= intensity) continue;
+      const hexObj = { px: hx, py: hy, intensity, R, isGrey };
+      newHexes.push(hexObj);
+      existingMap.set(key, hexObj);
+
+      if(dist < closestDist && !isGrey){ closestDist = dist; closestHex = hexObj; }
+    }
+  }
+
+  // Merge: replace updated hexes, keep untouched ones
+  const updatedKeys = new Set(newHexes.map(h => `${Math.round(h.px)},${Math.round(h.py)}`));
+  intensityHexes = intensityHexes.filter(h => !updatedKeys.has(`${Math.round(h.px)},${Math.round(h.py)}`));
+  intensityHexes = intensityHexes.concat(newHexes);
+
+  // Epicenter hex gets full epicMag; immediate ring (≤1.8R) gets a mild lift
+  // so yellow appears as a transition band between orange center and green surroundings
+  if(closestHex){
+    newHexes.forEach(h => {
+      const d = Math.hypot(h.px - ex, h.py - ey);
+      if(d > 0 && d <= R * 1.8){
+        // Lift toward epicMag but cap so small quakes can't bleed into wrong colour bands
+        const maxLift = Math.max(h.intensity, epicMag - 1.5);
+        h.intensity = Math.min(maxLift, h.intensity + (epicMag - h.intensity) * 0.3);
+      }
+    });
+  }
+
+  const hasOrangeHex = intensityHexes.some(h => !h.isGrey && h.intensity >= 3.5);
+  if(!orangeSoundPlayed && !greenSoundPlayed && !hasOrangeHex && intensityHexes.some(h => !h.isGrey && h.intensity >= 0.8 && h.intensity < 3.5)){
+    greenSoundPlayed = true;
+    playGreenSound();
+  }
+  if(!orangeSoundPlayed && hasOrangeHex){
+    orangeSoundPlayed = true;
+    playOrangeSound();
+  }
+
+  updateHomePanel();
+}
+
+function showIntensityOverlay(){
+  intensityOverlayVisible = true;
+  intensityOverlayAlpha = 0;
+}
+
+function drawIntensityOverlay(){
+  if(!intensityOverlayVisible || intensityHexes.length === 0) return;
+
+  const now = performance.now();
+  const elapsed = intensityOverlayMeta ? now - intensityOverlayMeta.createdAt : 9999;
+  intensityOverlayAlpha = Math.min(1, elapsed / 700);
+
+  ctx.save();
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  intensityHexes.forEach(h => {
+    const pts = hexPoints(h.px, h.py, h.R);
+    ctx.globalAlpha = (h.isGrey ? 0.18 : 0.44) * intensityOverlayAlpha;
+    ctx.beginPath();
+    pts.forEach(([px2, py2], i) => i === 0 ? ctx.moveTo(px2, py2) : ctx.lineTo(px2, py2));
+    ctx.closePath();
+    ctx.fillStyle = h.isGrey ? '#8b949e' : intensityColor(h.intensity);
+    ctx.fill();
+  });
+
+  ctx.restore();
+}
+
+function drawMap(){
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.fillStyle='#0a1628';
+  ctx.fillRect(0,0,W,H);
+  const t=getTransform();
+  ctx.setTransform(t.a,t.b,t.c,t.d,t.e,t.f);
+
+  const pts=OUTLINE.map(([rx,ry])=>px(rx,ry));
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1; i<pts.length; i++) ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.closePath();
+  ctx.fillStyle='#1a2332';
+  ctx.fill();
+  ctx.strokeStyle='#2d4a6e';
+  ctx.lineWidth=1.5/zoom;
+  ctx.stroke();
+
+  if(typeof BORDERS !== 'undefined'){
+    ctx.setLineDash([]);
+    BORDERS.forEach(border => {
+      const bp = border.map(([rx, ry]) => px(rx, ry));
+      ctx.beginPath();
+      ctx.moveTo(bp[0][0], bp[0][1]);
+      for(let i = 1; i < bp.length; i++) ctx.lineTo(bp[i][0], bp[i][1]);
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 0.8/zoom;
+      ctx.stroke();
+    });
+  }
+}
+
+function drawTsunamiCoast(){
+  if(coastLevels.length===0 || !coastVisible) return;
+  const pts=OUTLINE.map(([rx,ry])=>px(rx,ry));
+  const n=pts.length;
+  ctx.save();
+  ctx.lineJoin='round';
+
+  // Build continuous runs of active segments for each level,
+  // then stroke each run as a single connected path (no per-segment begin/stroke).
+  function strokeRuns(lvl, strokeStyle, lineWidth){
+    ctx.strokeStyle=strokeStyle;
+    ctx.lineWidth=lineWidth;
+    // Walk the outline twice to catch runs that wrap around the end.
+    // We mark each segment index as visited so wrap-around duplicates are skipped.
+    const visited=new Uint8Array(n);
+    for(let start=0; start<n; start++){
+      if(visited[start] || !coastLevels[start].has(lvl)) continue;
+      // Extend run forward
+      ctx.beginPath();
+      ctx.moveTo(pts[start][0], pts[start][1]);
+      let i=start;
+      while(!visited[i] && coastLevels[i].has(lvl)){
+        visited[i]=1;
+        const j=(i+1)%n;
+        ctx.lineTo(pts[j][0], pts[j][1]);
+        i=j;
+        if(i===start) break; // full loop closed
+      }
+      ctx.stroke();
+    }
+  }
+
+  for(const lvl of ['yellow','red','purple']){
+    const cfg=TSUNAMI_COLORS[lvl];
+    ctx.lineCap='round';
+    strokeRuns(lvl, cfg.glow, (cfg.lw+8)/zoom);
+    ctx.lineCap='round';
+    strokeRuns(lvl, cfg.stroke, cfg.lw/zoom);
+  }
+  ctx.restore();
+}
+
+function drawRegions(){
+  const now=performance.now();
+  const RAMP_MS = 1260;
+  const RAMP_LEAD_MS = 120;
+  REGIONS.forEach(r=>{
+    ctx.save();
+    const [x,y]=px(r.rx,r.ry);
+    const s=regionState[r.name];
+    const finalMag = s ? (s.pMag != null ? s.pMag : s.mag) : null;
+    let displayMag = finalMag;
+    if(finalMag !== null && finalMag >= 0.8 && s.triggeredAt != null){
+      const elapsed = now - s.triggeredAt;
+      if(elapsed < RAMP_MS){
+        const t = Math.max(0, elapsed / RAMP_MS);
+        const fromMag = s.prevMag != null ? s.prevMag : 0;
+        displayMag = fromMag + (finalMag - fromMag) * t;
+      }
+    }
+    if(finalMag === null || finalMag < 0.8) displayMag = null;
+    const col=magColor(displayMag);
+    const active=s && finalMag!==null && finalMag>=0.8;
+    const triSize=4/zoom;
+
+    ctx.beginPath();
+    ctx.moveTo(x, y-triSize);
+    ctx.lineTo(x+triSize*0.866, y+triSize*0.5);
+    ctx.lineTo(x-triSize*0.866, y+triSize*0.5);
+    ctx.closePath();
+    ctx.fillStyle=active ? col.hex+'cc' : 'rgba(100,140,180,0.4)';
+    ctx.fill();
+    ctx.strokeStyle=active ? col.hex : 'rgba(100,140,180,0.6)';
+    ctx.lineWidth=(active?1.5:1)/zoom;
+    ctx.stroke();
+
+    ctx.font=`${7/zoom}px monospace`;
+    ctx.fillStyle=active ? col.hex : '#484f58';
+    ctx.textAlign='center';
+    ctx.textBaseline='top';
+    ctx.fillText(r.name, x, y+triSize*0.5+2/zoom);
+
+    ctx.restore();
+  });
+}
+
+function drawHome(){
+  if(!homeLocation) return;
+  ctx.save();
+  const [x, y] = px(homeLocation.rx, homeLocation.ry);
+  const s = 7 / zoom;
+
+  // Determine color based on current hex intensity at home location
+  let homeCol = '#58a6ff';
+  if(intensityHexes.length > 0){
+    const [hpx, hpy] = [x, y];
+    let bestHex = null, bestDist = Infinity;
+    for(const h of intensityHexes){
+      const d = Math.hypot(h.px - hpx, h.py - hpy);
+      if(d < bestDist){ bestDist = d; bestHex = h; }
+    }
+    const mapW = H * MAP_ASPECT;
+    const R = mapW * 0.013;
+    if(bestHex && bestDist < R * 2 && bestHex.intensity >= 2){
+      homeCol = intensityColor(bestHex.intensity);
+    }
+  }
+
+  // House shape: walls (square) + roof (triangle)
+  const hw = s * 0.75;   // half-width of walls
+  const rh = s * 0.8;    // roof height above walls top
+  const wh = s * 0.9;    // wall height
+  const wt = y - wh * 0.4;   // wall top Y
+  const wb = y + wh * 0.6;   // wall bottom Y
+
+  // Roof
+  ctx.beginPath();
+  ctx.moveTo(x, wt - rh);
+  ctx.lineTo(x + hw + s * 0.15, wt + s * 0.1);
+  ctx.lineTo(x - hw - s * 0.15, wt + s * 0.1);
+  ctx.closePath();
+  ctx.fillStyle = homeCol;
+  ctx.fill();
+
+  // Walls
+  ctx.fillRect(x - hw, wt, hw * 2, wh);
+
+  // Door (small rectangle at bottom center)
+  const dw = hw * 0.45, dh = wh * 0.5;
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(x - dw / 2, wb - dh, dw, dh);
+
+  // Outline
+  ctx.strokeStyle = homeCol;
+  ctx.lineWidth = 0.8 / zoom;
+  ctx.strokeRect(x - hw, wt, hw * 2, wh);
+
+  ctx.restore();
+}
+function drawPlaceCursor(){
+  if(!placeModeActive || !cursorMapPos) return;
+  const [rx, ry] = cursorMapPos;
+  const [x, y] = px(rx, ry);
+  const triSize = 4/zoom;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(x, y-triSize);
+  ctx.lineTo(x+triSize*0.866, y+triSize*0.5);
+  ctx.lineTo(x-triSize*0.866, y+triSize*0.5);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(63,185,80,0.25)';
+  ctx.fill();
+  ctx.strokeStyle = '#3fb950';
+  ctx.lineWidth = 1.5/zoom;
+  ctx.setLineDash([3/zoom, 3/zoom]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawSensorFlashes(now){
+  const FLASH_DURATION = 600;
+  const t = getTransform();
+  ctx.setTransform(t.a,t.b,t.c,t.d,t.e,t.f);
+  sensorFlashes = sensorFlashes.filter(f => now - f.startAt < FLASH_DURATION);
+  sensorFlashes.forEach(f=>{
+    const elapsed = now - f.startAt;
+    const cycle = elapsed / (FLASH_DURATION / 2);
+    const phase = cycle % 1;
+    const alpha = phase < 0.5 ? (1 - phase * 2) * 0.9 : 0;
+    if(alpha <= 0.01) return;
+    const triSize = 4/zoom;
+    const [x, y] = [f.x, f.y];
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, y-triSize*2.2);
+    ctx.lineTo(x+triSize*2.2*0.866, y+triSize*2.2*0.5);
+    ctx.lineTo(x-triSize*2.2*0.866, y+triSize*2.2*0.5);
+    ctx.closePath();
+    ctx.strokeStyle=`rgba(63,185,80,${alpha})`;
+    ctx.lineWidth=1.5/zoom;
+    ctx.stroke();
+    ctx.restore();
+  });
+}
+
+function drawRipples(now){
+  ripples=ripples.filter(r=>!r.done);
+  ripples.forEach(r=>{
+    if(now<r.spawnAt) return;
+    r.progress+=r.speed;
+    if(r.progress>=r.maxR){ r.done=true; return; }
+
+    if(r.progress > 0) r.regionTriggers.forEach(rt=>{
+      if(!rt.triggered && r.progress>=rt.dist){
+        rt.triggered=true;
+        const fm=feltMag(r.mag, rt.dist, r.depth);
+        const fmP=fm*0.4;
+        if(r.waveType==='p'){
+          if(fm>=0.3) sensorFlashes.push({x:rt.sx, y:rt.sy, startAt:now});
+          if(fm>=0.3 && !r.sensorDetectPlayed){
+            r.sensorDetectPlayed = true;
+            const audio = new Audio('sounds/sensor_detect.mp3');
+            audio.volume = 0.1;
+            audio.play();
+          }
+          regionState[rt.name]={mag:fm>=0.8?fm:null, pMag:fmP>=0.8?fmP:null, depth:r.depth, triggeredAt:now-700, prevMag:null};
+          updateRegionMini();
+          if(fm>=0.3 && r.revealState && !r.revealState.revealed){
+            r.revealState.hits++;
+            if(r.revealState.hits >= 3){
+              r.revealState.revealed=true;
+              if(r.epicenterData){
+                epicenters.push(r.epicenterData);
+                buildIntensityOverlay(r.epicenterData.rx, r.epicenterData.ry, r.epicenterData.mag, r.depth);
+              }
+              pendingEpicenters = pendingEpicenters.filter(e=>e.x!==r.x||e.y!==r.y);
+              const triggered = r.regionTriggers.filter(t=>t.triggered);
+              if(triggered.length >= 3){
+                const cx = (triggered.reduce((s,t)=>s+t.sx,0) + r.x) / (triggered.length + 1);
+                const cy = (triggered.reduce((s,t)=>s+t.sy,0) + r.y) / (triggered.length + 1);
+                const ox = W - H * MAP_ASPECT;
+                smoothZoomTo(cx + ox, cy, 4, 1400, ()=>{
+                  r.revealState.zoomFinished = true;
+                  showIntensityOverlay();
+                });
+              } else {
+                r.revealState.zoomFinished = true;
+                showIntensityOverlay();
+              }
+            }
+          }
+          if(fm>=0.8 && r.revealState && r.revealState.zoomFinished){
+            const now2=new Date();
+            const ts=now2.getHours().toString().padStart(2,'0')+':'+now2.getMinutes().toString().padStart(2,'0')+':'+now2.getSeconds().toString().padStart(2,'0');
+            showAlert({
+              mainMag:r.mag, foreMag:fmP>=0.8?fmP:null, afterMag:null,
+              depth:r.depth, loc:rt.name, time:ts, estimated:true
+            });
+          }
+          if(r.tsunamiRef && !r.tsunamiRef.timerStarted){
+            r.tsunamiRef.timerStarted=true;
+            setTimeout(()=>{ r.tsunamiRef.issued=true; computeCoastLevels(); startCoastFlash(); updateTsunamiPanel(); }, TSUNAMI_DELAY_MS);
+          }
+        } else {
+          if(fm>=0.3 && !r.sensorDetectPlayed){
+            r.sensorDetectPlayed = true;
+            const audio = new Audio('sounds/sensor_detect2.mp3');
+            audio.volume = 0.1;
+            audio.play();
+          }
+          const prevP=regionState[rt.name] ? regionState[rt.name].pMag : null;
+          const settledPMag = regionState[rt.name] ? (regionState[rt.name].pMag != null ? regionState[rt.name].pMag : regionState[rt.name].mag) : null;
+          regionState[rt.name]={mag:fm>=0.8?fm:null, pMag:null, depth:r.depth, triggeredAt:now-700, prevMag:settledPMag};
+          updateRegionMini();
+          if(fm>=0.8 && r.revealState && r.revealState.zoomFinished){
+            const now2=new Date();
+            const ts=now2.getHours().toString().padStart(2,'0')+':'+now2.getMinutes().toString().padStart(2,'0')+':'+now2.getSeconds().toString().padStart(2,'0');
+            showAlert({
+              mainMag:r.mag, foreMag:prevP, afterMag:null,
+              depth:r.depth, loc:rt.name, time:ts, estimated:false
+            });
+            if(!r.feedLogged){ r.feedLogged=true; addFeedEntry(rt.name, r.mag, r.depth); }
+          }
+        }
+      }
+    });
+
+    if(r.progress <= 0) return;
+    if(r.revealState && !r.revealState.revealed) return;
+    const frac = r.progress/r.maxR;
+    const alpha = frac<0.75 ? 0.85 : 0.85*(1-(frac-0.75)/0.25);
+    if(alpha<=0.005) return;
+    const lw = r.waveType==='p' ? 1.2/zoom : (r.mag>=5 ? 2.5/zoom : 2/zoom);
+    ctx.beginPath();
+    ctx.arc(r.x, r.y, r.progress, 0, Math.PI*2);
+    ctx.strokeStyle=`rgba(${r.color},${alpha})`;
+    ctx.lineWidth=lw;
+    ctx.stroke();
+  });
+}
+
+function drawEpicenters(now){
+  epicenters.forEach(e=>{
+    const s=7/zoom;
+    ctx.strokeStyle='#f85149'; ctx.lineWidth=2/zoom;
+    ctx.beginPath(); ctx.moveTo(e.x-s,e.y-s); ctx.lineTo(e.x+s,e.y+s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(e.x+s,e.y-s); ctx.lineTo(e.x-s,e.y+s); ctx.stroke();
+    ctx.font=`bold ${10/zoom}px monospace`; ctx.fillStyle='#f85149';
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillText('M'+e.mag.toFixed(1), e.x+s+4/zoom, e.y+4/zoom);
+  });
+  pendingEpicenters = pendingEpicenters.filter(e => now < e.fadeUntil);
+  pendingEpicenters.forEach(e=>{
+    const frac = Math.max(0, (e.fadeUntil - now) / (e.fadeUntil - e.spawnAt));
+    const alpha = frac;
+    const s=7/zoom;
+    ctx.strokeStyle=`rgba(248,81,73,${alpha})`; ctx.lineWidth=2/zoom;
+    ctx.beginPath(); ctx.moveTo(e.x-s,e.y-s); ctx.lineTo(e.x+s,e.y+s); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(e.x+s,e.y-s); ctx.lineTo(e.x-s,e.y+s); ctx.stroke();
+  });
+}
+
+let lastFrameTime = null, avgMsPerFrame = 16.67;
+function loop(){
+  const now=performance.now();
+  if(lastFrameTime !== null){
+    const dt = now - lastFrameTime;
+    if(dt > 0 && dt < 100) avgMsPerFrame = avgMsPerFrame * 0.95 + dt * 0.05;
+  }
+  lastFrameTime = now;
+  drawMap();
+  const t=getTransform();
+  ctx.setTransform(t.a,t.b,t.c,t.d,t.e,t.f);
+  drawTsunamiCoast();
+  drawRegions();
+  drawHome();
+  drawIntensityOverlay();
+  drawSensorFlashes(now);
+  drawPlaceCursor();
+  drawRipples(now);
+  drawEpicenters(now);
+  ctx.setTransform(1,0,0,1,0,0);
+  requestAnimationFrame(loop);
+}
+
+canvas.addEventListener('wheel', function(e){
+  e.preventDefault();
+  const cx = e.offsetX * (W / canvas.clientWidth);
+  const cy = e.offsetY * (H / canvas.clientHeight);
+  zoomBy(e.deltaY<0?1.15:1/1.15, cx, cy);
+}, {passive:false});
+
+canvas.addEventListener('mousemove', function(e){
+  if(!placeModeActive) return;
+  const rect=canvas.getBoundingClientRect();
+  const sx=(e.clientX-rect.left)*(W/rect.width);
+  const sy=(e.clientY-rect.top)*(H/rect.height);
+  cursorMapPos=screenToMap(sx,sy);
+});
+
+canvas.addEventListener('mouseleave', function(){
+  cursorMapPos=null;
+});
+
+canvas.addEventListener('mousedown', function(e){
+  mouseDownPos={x:e.clientX, y:e.clientY};
+  if(!placeModeActive && zoom<=1) return;
+  if(!placeModeActive){
+    isPanning=true;
+    panStartX=e.clientX; panStartY=e.clientY;
+    panStartPanX=panX; panStartPanY=panY;
+    canvas.style.cursor='grabbing';
+  }
+});
+window.addEventListener('mousemove', function(e){
+  if(!isPanning) return;
+  panX=panStartPanX+(e.clientX-panStartX);
+  panY=panStartPanY+(e.clientY-panStartY);
+  clampPan();
+});
+window.addEventListener('mouseup', function(){
+  if(!isPanning) return;
+  isPanning=false;
+  canvas.style.cursor= placeModeActive ? 'cell' : 'crosshair';
+});
+
+canvas.addEventListener('click', function(e){
+  if(Math.hypot(e.clientX-mouseDownPos.x, e.clientY-mouseDownPos.y)>4) return;
+  const rect=canvas.getBoundingClientRect();
+  const sx=(e.clientX-rect.left)*(W/rect.width);
+  const sy=(e.clientY-rect.top)*(H/rect.height);
+  const [rx,ry]=screenToMap(sx,sy);
+
+  if(homeModeActive){
+    if(pointInPolygon(rx, ry)){
+      homeLocation = { rx, ry };
+      homeModeActive = false;
+      _syncHomeModeUI();
+    }
+    return;
+  }
+  if(placeModeActive){
+    placeSensor(rx, ry);
+  } else {
+    spawnQuakeSequence(rx, ry, getMag(), getDepth());
+  }
+});
+
+window.addEventListener('keydown', function(e){
+  if(e.key==='Escape' && placeModeActive) togglePlaceMode();
+  if(e.key==='Escape' && homeModeActive){ homeModeActive=false; _syncHomeModeUI(); }
+});
+
+function clearAll(){
+  ripples=[]; epicenters=[]; pendingEpicenters=[]; sensorFlashes=[];
+  clearAlert();
+  totalCount=0; maxMag=0;
+  REGIONS.forEach(r=>{ regionState[r.name]={mag:null,depth:null}; });
+  tsunamiWarnings=[]; coastLevels=[]; coastVisible=true; intensityHexes=[]; intensityOverlayVisible=false; intensityOverlayMeta=null; intensityOverlayAlpha=0;
+  document.getElementById('tsunami-panel').classList.remove('visible');
+  hideHomePanel();
+  positionLegend();
+  updateRegionMini();
+  document.getElementById('stat-count').textContent='0';
+  document.getElementById('stat-max').textContent='—';
+  document.getElementById('feed').innerHTML='';
+}
+
+const ro=new ResizeObserver(()=>{
+  resize();
+  if(tsunamiWarnings.some(t=>t.issued)) positionTsunamiPanel();
+  positionLegend();
+});
+ro.observe(wrap);
+resize();
+updateRegionMini();
+setTimeout(positionLegend, 0);
+setTimeout(buildBfsLandMask, 100);
+setTimeout(function generateInitialSensors(){
+  const TARGET = 100;
+  const MAX_ATTEMPTS = 5000;
+  let placed = 0, attempts = 0;
+  while(placed < TARGET && attempts < MAX_ATTEMPTS){
+    attempts++;
+    const rx = Math.random();
+    const ry = Math.random();
+    if(pointInPolygon(rx, ry)){
+      placeSensor(rx, ry);
+      placed++;
+    }
+  }
+}, 200);
+loop();
+</script>
+</body>
+</html>
